@@ -1,0 +1,11 @@
+# matlab data
+.mat
+
+# matlab plots
+.fig
+.png
+.psd
+.eps
+
+# matlab autosaves
+.asv
