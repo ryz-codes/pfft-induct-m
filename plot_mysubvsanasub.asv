@@ -1,0 +1,10 @@
+load new_pfft;
+% Get the L and R
+L_c = real(Vsub);
+L_a = real(Vsuba);
+L_e = abs(L_c-L_a);
+R_c = imag(Vsub).*w(:);
+R_a = imag(Vsuba).*w(:);
+
+semilogx(w,L_c,w,L_a);
+grid on
