@@ -1,0 +1,575 @@
+function varargout = gui_in(varargin)
+% GUI_IN M-file for gui_in.fig
+%      GUI_IN, by itself, creates a new GUI_IN or raises the existing
+%      singleton*.
+%
+%      H = GUI_IN returns the handle to a new GUI_IN or the handle to
+%      the existing singleton*.
+%
+%      GUI_IN('CALLBACK',hObject,eventData,handles,...) calls the local
+%      function named CALLBACK in GUI_IN.M with the given input arguments.
+%
+%      GUI_IN('Property','Value',...) creates a new GUI_IN or raises the
+%      existing singleton*.  Starting from the left, property value pairs are
+%      applied to the GUI before gui_in_OpeningFcn gets called.  An
+%      unrecognized property name or invalid value makes property application
+%      stop.  All inputs are passed to gui_in_OpeningFcn via varargin.
+%
+%      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
+%      instance to run (singleton)".
+%
+% See also: GUIDE, GUIDATA, GUIHANDLES
+%
+% TO DOS
+% - Shifting lower bounds. Changing lower bounds changes the offsets.
+% - Implement add layer, delete layer, move up and move down.
+% - Design the T+H splitting into the gui.
+
+% Edit the above text to modify the response to help gui_in
+
+% Last Modified by GUIDE v2.5 08-Oct-2012 19:14:13
+
+% Begin initialization code - DO NOT EDIT
+gui_Singleton = 1;
+gui_State = struct('gui_Name',       mfilename, ...
+                   'gui_Singleton',  gui_Singleton, ...
+                   'gui_OpeningFcn', @gui_in_OpeningFcn, ...
+                   'gui_OutputFcn',  @gui_in_OutputFcn, ...
+                   'gui_LayoutFcn',  [] , ...
+                   'gui_Callback',   []);
+if nargin && ischar(varargin{1})
+    gui_State.gui_Callback = str2func(varargin{1});
+end
+
+if nargout
+    [varargout{1:nargout}] = gui_mainfcn(gui_State, varargin{:});
+else
+    gui_mainfcn(gui_State, varargin{:});
+end
+% End initialization code - DO NOT EDIT
+
+%--------------------------------------------------------------------------
+% Refresh functions
+%--------------------------------------------------------------------------
+% --- Refreshes the display to match the state variables
+function disp_refresh(handles)
+% handles    handle to figure
+L = handles.L;
+ii = handles.lay_select;
+
+% Update the list box
+listtxt = cell(L.layerN,1);
+for ij = 1:L.layerN
+    lay_text = L.names{ij};
+    if isempty(lay_text)
+        lay_text = sprintf('Layer %u ',ij);
+    end
+    listtxt{ij} = lay_text;
+end
+
+set(handles.listLAYER,'Value',ii)
+set(handles.listLAYER,'String',listtxt)
+
+% Update the layer info panel
+set(handles.txtNAME,'String',L.names{ii})
+set(handles.txtMU_R,'String',num2str(L.mu_r(ii),6))
+set(handles.txtSIG,'String',num2str(L.sig(ii),6))
+set(handles.txtZN,'String',num2str(L.zN(ii),6))
+set(handles.txtBNDS,'String',num2str(L.bnds(ii),6))
+set(handles.chkCOIL,'Value',(L.coil_layer == ii))
+
+% Thickness
+thick = L.bnds(ii+1) - L.bnds(ii);
+set(handles.txtBND2,'String',num2str(thick,6))
+
+% Draw rectangles onto plot representing layers
+cla(handles.axes1);
+for ij = 1:L.layerN
+    x = -1;
+    y = L.bnds(ij);
+    w = 2;
+    h = L.bnds(ij+1)-L.bnds(ij);
+    
+    if L.mu_r(ij) == 1 && L.sig(ij) == 0
+    % draw as a white rectangle with black border if it is air
+        rectangle('parent',handles.axes1,'position',[x y w h], ...
+            'FaceColor','w');
+    else
+    % draw as grey rectangles without borders if it is not air
+        if mod(ij,2)==0
+            rectangle('parent',handles.axes1,'position',[x y w h], ...
+                'FaceColor',[0.8 0.8 0.8],'LineStyle','none');
+        else
+            rectangle('parent',handles.axes1,'position',[x y w h], ...
+                'FaceColor',[0.7 0.7 0.7],'LineStyle','none');
+        end
+    end
+end
+% Draw gridlines if it is turned on
+if get(handles.tgGRID,'Value')
+    for ij = 1:L.layerN
+        z = linspace(L.bnds(ij),L.bnds(ij+1),L.zN(ij));
+        y = kron(z(2:end-1).',[1 1]);
+        x = kron(ones(size(y,1),1),[-1 1]);
+        line(x.',y.','parent',handles.axes1,'color',[0.5,0.5,0.5],'LineWidth',0.1);
+        
+        bny = [z(1) z(end); z(1) z(end)];
+        bnx = x(1:2,1:2).';
+        
+        line(bnx,bny,'parent',handles.axes1,'color',[0,0,0],'LineWidth',0.6);
+    end
+end
+% Draw text to annotate the rectangles, if labels are turned on
+if get(handles.tgLABELS,'Value')
+    for ij = 1:L.layerN
+        y = L.bnds(ij);
+        h = L.bnds(ij+1)-L.bnds(ij);
+        cx = 0*(-1)^mod(ij,2);
+        cy = y+h/2;
+
+        s = L.names{ij};
+        
+        % Add details if they are turned on
+        if get(handles.tgDETAILS,'Value') 
+            if L.coil_layer == ij
+                s = [s sprintf('\n (Coil layer)')];
+            end
+
+            s = [s sprintf('\n\\mu_r = %3g, \\sigma = %3g, N_z = %3g',...
+                L.mu_r(ij),L.sig(ij),L.zN(ij))];
+        else
+            if L.coil_layer == ij
+                s = [s '*'];
+            end
+        end
+        
+        text(cx,cy,s,'HorizontalAlignment','center');
+    end
+end
+xlim(handles.axes1,[-1 1]);
+
+pad = 0.1*(L.bnds(end)-L.bnds(1)); % 10% padding
+ylim(handles.axes1,[L.bnds(1)-pad L.bnds(end)+pad])
+
+
+% --- Refreshes the state variables to match data entered
+function handles = data_refresh(hObject,handles)
+
+% handles    handle to figure
+L = handles.L;
+ii = handles.lay_select;
+
+% Update the layer info panel
+L.names{ii} = get(handles.txtNAME,'String');
+L.mu_r(ii) = str2double(get(handles.txtMU_R,'String'));
+L.sig(ii) = str2double(get(handles.txtSIG,'String'));
+L.zN(ii) = str2double(get(handles.txtZN,'String'));
+
+% Change coil layer only if it can be changed
+if get(handles.chkCOIL,'Value')
+    L.coil_layer = ii;
+end
+
+% Lower boundary, shift all boundaries by the same amount
+dbnds = str2double(get(handles.txtBNDS,'String')) - L.bnds(ii);
+L.bnds = L.bnds+dbnds;
+
+% Layer thickness, shift everything up
+cur_thick = L.bnds(ii+1)-L.bnds(ii);
+new_thick = str2double(get(handles.txtBND2,'String'));
+dthick = new_thick-cur_thick;
+L.bnds((ii+1):end) = L.bnds((ii+1):end) +dthick;
+
+handles.L = L;
+
+% Save data
+guidata(hObject,handles);
+
+
+
+
+%--------------------------------------------------------------------------
+% Layer manipulation
+%--------------------------------------------------------------------------
+function L = layer_new(L,ij)
+% Makes new layer by inserting at the end and copying everything in ii.
+ii = L.layerN+1;
+L.layerN = ii;
+L.mu_r(ii) = L.mu_r(ij);
+L.sig(ii) = L.sig(ij);
+L.zN(ii) = L.zN(ij);
+L.bnds(ii+1) = L.bnds(ii)+L.bnds(ij+1)-L.bnds(ij);
+L.names{ii} = ['Copy of ' L.names{ij}];
+
+function L = layer_del(L,ii)
+Ln = L;
+Ln.mu_r=[];
+Ln.mu_r=L.mu_r([1:(ii-1) (ii+1):end]);
+Ln.sig=[];
+Ln.sig=L.sig([1:(ii-1) (ii+1):end]);
+Ln.zN=[];
+Ln.zN=L.zN([1:(ii-1) (ii+1):end]);
+Ln.bnds=[];
+Ln.bnds=L.bnds([1:(ii-1) (ii+1):end]);
+Ln.names={};
+Ln.names={L.names{1:(ii-1)} L.names{(ii+1):end}};
+Ln.layerN = L.layerN-1;
+if ii == L.coil_layer
+    Ln.coil_layer=L.coil_layer-1;
+end
+L = Ln;
+
+% function L = shift_swap(L,ii,ij)
+% % Moves the content of index ii to ij,
+% t_name = L.names{ii};
+% t_mu_r = L.mu_r(ii);
+% t_sig = L.sig(ii);
+% t_zN = L.zN(ii);
+
+%--------------------------------------------------------------------------
+% Toolbar
+%--------------------------------------------------------------------------
+function uisave_ClickedCallback(hObject, eventdata, handles)
+% hObject    handle to uisave (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+FileName = uiputfile('layers.mat','Save layer structure variable as');
+if FileName ~= 0 % Didn't cancel
+    L = handles.L;
+    save(FileName,'L');
+end
+
+function uiopen_ClickedCallback(hObject, eventdata, handles)
+% hObject    handle to uiopen (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+FileName = uigetfile('layers.mat','Open layer structure variable');
+if FileName ~= 0 % Didn't cancel
+    load(FileName);
+    handles.L = L;
+    % TO DO: FOOL PROOF THE LOADING PROCESS
+end
+handles.lay_select = 1;
+disp_refresh(handles);
+guidata(hObject, handles);
+
+%--------------------------------------------------------------------------
+% Form Interface
+%--------------------------------------------------------------------------
+% --- Executes just before gui_in is made visible.
+function gui_in_OpeningFcn(hObject, eventdata, handles, varargin)
+% This function has no output args, see OutputFcn.
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% varargin   command line arguments to gui_in (see VARARGIN)
+
+% Choose default command line output for gui_in
+handles.output = hObject;
+
+% Initialize data
+handles.L = defaultL(4);
+handles.lay_select = 1;
+
+% Refresh 
+disp_refresh(handles);
+
+% Update handles structure
+guidata(hObject, handles);
+
+% --- Outputs from this function are returned to the command line.
+function varargout = gui_in_OutputFcn(hObject, eventdata, handles) 
+% varargout  cell array for returning output args (see VARARGOUT);
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Get default command line output from handles structure
+varargout{1} = handles.output;
+
+
+%--------------------------------------------------------------------------
+% Data entry Callback and Creation
+%--------------------------------------------------------------------------
+
+% --- Executes on selection change in listLAYER.
+function listLAYER_Callback(hObject, eventdata, handles)
+% hObject    handle to listLAYER (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+handles = data_refresh(hObject,handles);
+handles.lay_select = get(handles.listLAYER,'Value');
+disp_refresh(handles);
+
+% Update handles structure
+guidata(hObject, handles);
+
+% --- Executes during object creation, after setting all properties.
+function listLAYER_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to listLAYER (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function txtMU_R_Callback(hObject, eventdata, handles)
+% hObject    handle to txtMU_R (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hints: get(hObject,'String') returns contents of txtMU_R as text
+%        str2double(get(hObject,'String')) returns contents of txtMU_R as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function txtMU_R_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to txtMU_R (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function txtSIG_Callback(hObject, eventdata, handles)
+% hObject    handle to txtSIG (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hints: get(hObject,'String') returns contents of txtSIG as text
+%        str2double(get(hObject,'String')) returns contents of txtSIG as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function txtSIG_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to txtSIG (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function txtZN_Callback(hObject, eventdata, handles)
+% hObject    handle to txtZN (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hints: get(hObject,'String') returns contents of txtZN as text
+%        str2double(get(hObject,'String')) returns contents of txtZN as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function txtZN_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to txtZN (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function txtBNDS_Callback(hObject, eventdata, handles)
+% hObject    handle to txtBNDS (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hints: get(hObject,'String') returns contents of txtBNDS as text
+%        str2double(get(hObject,'String')) returns contents of txtBNDS as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function txtBNDS_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to txtBNDS (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function txtBND2_Callback(hObject, eventdata, handles)
+% hObject    handle to txtBND2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hints: get(hObject,'String') returns contents of txtBND2 as text
+%        str2double(get(hObject,'String')) returns contents of txtBND2 as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function txtBND2_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to txtBND2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in chkCOIL.
+function chkCOIL_Callback(hObject, eventdata, handles)
+% hObject    handle to chkCOIL (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% refresh displays
+handles = data_refresh(hObject,handles);
+disp_refresh(handles);
+
+% Hint: get(hObject,'Value') returns toggle state of chkCOIL
+
+
+% --- Executes on button press in pshUP.
+function pshUP_Callback(hObject, eventdata, handles)
+% hObject    handle to pshUP (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes on button press in pshDOWN.
+function pshDOWN_Callback(hObject, eventdata, handles)
+% hObject    handle to pshDOWN (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+
+function txtNAME_Callback(hObject, eventdata, handles)
+% hObject    handle to txtNAME (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+
+% Hints: get(hObject,'String') returns contents of txtNAME as text
+%        str2double(get(hObject,'String')) returns contents of txtNAME as a double
+
+% --- Executes during object creation, after setting all properties.
+function txtNAME_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to txtNAME (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in pshADD.
+function pshADD_Callback(hObject, eventdata, handles)
+% hObject    handle to pshADD (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+ii = handles.lay_select;
+handles.L = layer_new(handles.L,ii);
+handles.lay_select=handles.L.layerN;
+% refresh displays
+disp_refresh(handles);
+guidata(hObject,handles);
+
+
+% --- Executes on button press in pshMINUS.
+function pshMINUS_Callback(hObject, eventdata, handles)
+% hObject    handle to pshMINUS (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+ii = handles.lay_select;
+handles.L = layer_del(handles.L,ii);
+if ii > handles.L.layerN, handles.lay_select=handles.L.layerN; end
+% refresh displays
+disp_refresh(handles);
+guidata(hObject,handles);
+
+% --- Executes on button press in tgGRID.
+function tgGRID_Callback(hObject, eventdata, handles)
+% hObject    handle to tgGRID (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hint: get(hObject,'Value') returns toggle state of tgGRID
+
+
+% --- Executes on button press in tgDETAILS.
+function tgDETAILS_Callback(hObject, eventdata, handles)
+% hObject    handle to tgDETAILS (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hint: get(hObject,'Value') returns toggle state of tgDETAILS
+
+
+% --- Executes on button press in tgLABELS.
+function tgLABELS_Callback(hObject, eventdata, handles)
+% hObject    handle to tgLABELS (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles = data_refresh(hObject,handles);
+% refresh displays
+disp_refresh(handles);
+% Hint: get(hObject,'Value') returns toggle state of tgLABELS
+
+
+% --- Executes on selection change in popupmenu2.
+function popupmenu2_Callback(hObject, eventdata, handles)
+% hObject    handle to popupmenu2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns popupmenu2 contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from popupmenu2
+
+
+% --- Executes during object creation, after setting all properties.
+function popupmenu2_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to popupmenu2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end

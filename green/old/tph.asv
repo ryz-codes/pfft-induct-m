@@ -1,0 +1,164 @@
+classdef tph
+    %TPH Summary of this class goes here
+    %   Detailed explanation goes here
+    
+    properties
+        H; T; r; zh; zt;
+    end
+    
+    methods
+        function hObject = tph(L,lbnd,ubnd)
+            [hObject.H, 
+             hObject.T
+             hObject.r 
+             hObject.zh 
+             hObject.zt] = tableTPH(L,lbnd,ubnd);
+        end
+        
+        function [G] = lookup(hObj,r,z,zp)
+            %LOOKUPTPH Summary of this function goes here
+            %   Table details
+            %   r,z,zp - matrix of r, z, zp of the points to be examined.
+            %   H - Hankel table, spanned by ri along its columns and zh along its
+            %       rows.
+            %   T - Toeplitz table, spanned by ri along its columns and zt along its
+            %       rows.
+            %   ri - r values along the columns of the table
+            %   zh - hankel row values
+            %   zt - toeplitz row values
+            xh = z+zp;
+            xt = abs(z-zp);
+
+            if numel(xh) == 1
+                xh = xh * ones(size(r));
+                xt = xt * ones(size(r));
+            end
+
+
+            Gh = interp2(hObj.r,hObj.zh,hObj.H,r,xh);
+            Gt = interp2(hObj.r,hObj.zt,hObj.T,r,xt);
+            % Gh = interp2(xh,r,H,zh,ri);
+            % Gt = interp2(xt,r,T,zt,ri);
+
+            G = Gh+Gt;
+        end
+    end
+    
+end
+
+function [Hr Tr r zh zt] = tableTPH(L,lbnd,ubnd)
+%TABLETPH Given the layer structure L, makes a T+H lookup table for the
+%layer selected by the flag coil_layer.
+% SYSTEM CONSTANTS
+INTERP_COLS = 10;
+if nargin == 1
+    lbnd = 0.01;
+    ubnd = 0.99;
+end
+
+% Identify coil layer
+coil_layer = L.coil_layer;     
+zN = L.zN(coil_layer);
+
+% Assert that this layer can contain the coil
+assert(L.sig(coil_layer)==0 &&...
+    L.mu_r(coil_layer)==1, 'Coil layer must be free-space!');
+
+% Identify upper and lower boundaries
+bnd_a = L.bnds(coil_layer+1);
+bnd_b = L.bnds(coil_layer);
+
+% Make the "box" 95% of the way to either boundary.
+z_val = linspace(bnd_b,bnd_a,zN);
+z = z_val(round(lbnd*zN):round(ubnd*zN));
+
+% Distribute runs evenly between two ends
+N = length(z);
+ip = round(linspace(1,N,INTERP_COLS));
+
+tstart = tic;
+A = cell(INTERP_COLS,1);
+for ii = 1:INTERP_COLS
+    fprintf('Run %u/%u: z=%g... ',ii,INTERP_COLS,z(ip(ii))); tic;
+    [A{ii},r,zout] = edd2([z(1),z(N)],z(ip(ii)),L);
+    fprintf('Ok (%gs)\n',toc);
+end
+tFDM = toc(tstart);
+
+
+% Do each r value
+Tr = [];
+Hr = [];
+tic;
+for ii = 1:length(r)
+    fprintf('Split %u/%u: r=%g... ',ii,length(r),r(ii)); 
+     G = zeros(N,INTERP_COLS);
+     for ij = 1:INTERP_COLS
+         G(:,ij) = (A{ij}(ii,:)).';
+     end
+    
+    [Tr1 Hr1 FLAG RELRES ITER] = splitTPH(G,ip);
+    Tr = [Tr Tr1];
+    Hr = [Hr Hr1];
+    fprintf('%u iters (res=%g)\n',ITER,RELRES);
+end
+
+disp('====================');
+fprintf('Total FDM time=%gs\n',tFDM);
+fprintf('Total split time=%gs\n',toc);
+
+% Prepare the guide vectors.
+r(1) = 0; % smudge the first r point to make it zero
+zh = linspace(2*z(1),2*z(N),2*N-1);
+zt = linspace(0,z(N)-z(1),N);
+
+end
+
+function [t h FLAG RELRES ITER] = splitTPH(Gcols,ip)
+%SPLITTPH Splits the TPH matrix G into T and H
+%   Symmetry along the main diagonal is assumed (reciprocity statement)
+%   Gcols is the column of G(z,zp(ip)) evaluated at each zp value
+
+[M n_ip] = size(Gcols);
+assert(n_ip==numel(ip), 'Input must be ordered such that Gcols has as many columns as ip has elements.')
+
+t=zeros(2*M-1,1);
+h=zeros(2*M-1,1);
+
+% Construct the linear algebra matrix
+A = [];
+for ii = 1:n_ip
+    A = [A; get_tn_sym(ip(ii)), get_hn(ip(ii))];
+end
+
+
+% Construct the b vector
+b = reshape(Gcols,n_ip*M,1);
+
+% Solve using LSQR
+[x,FLAG,RELRES,ITER] = lsqr(A,b,1e-12,500);
+
+% Extract
+t = x(1:M);
+h = x(M+1:end);
+
+    function Hn = get_hn(ii)
+    %GETHN Gets the M x (2M-1) coefficient matrix for the coefficients of H
+    %  for a particular index
+        Hn = [sparse(M,ii-1), speye(M), sparse(M,M-ii)];
+    end
+
+    function Tn = get_tn_sym(ii)
+    %GETHN Gets the M x M coefficient matrix for the symmetric T of 
+    % a particular index
+        %Tn = [sparse(M-ii,ii-1), speye(M-ii), sparse(M-ii,1);
+        %    sparse(ii,M-ii),spjay(ii)];
+        Tn = [spjay(ii),sparse(ii,M-ii);
+            sparse(M-ii,1), speye(M-ii), sparse(M-ii,ii-1)];
+    end
+     
+    function out = spjay(N)
+    %SPJAY like speye, except for the antidiagonal identity J.
+        out = sparse(1:N,N:-1:1,ones(1,N));
+    end
+end

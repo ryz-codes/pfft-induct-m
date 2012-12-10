@@ -1,0 +1,20 @@
+Pre-corrected FFT for MATLAB
+Release notes
+
+Version 1.3
+- Hankel-like functions capability. 
+- Vector potential compatibility.
+- Parallel toolbox parfor compatibility.
+
+Version 1.2
+- Direct stencil is now a square.
+- Reciprocity is utilized extensively in the precorrection calculation. 
+  Precorrection projection is restricted to the forward half, and the 
+  reverse half is simply mirrored. 
+- Bug fixes and further vectorization in the precorrection loop.
+- Addition of a "verbose mode" which gives feedback on setup times.
+
+Still to come:
+- Extend pfft.pmat() to projecting quadrature, weights and excitations.
+- Hankel-like function capability
+- Double layer compatibility.

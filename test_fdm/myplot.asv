@@ -1,0 +1,25 @@
+function myplot(h,r1,G1,r2,G2)
+%MYPLOT Summary of this function goes here
+%   Detailed explanation goes here
+
+c_set = hsv(12);
+m_set = {'+','o','*','.','x','s','d','^','v','>','<','p','h'};
+
+hold(h,'on');
+
+% Plot markers
+for ii = 1:size(G1,2)
+    plot(h,r1,G1(:,ii),'color',c_set(ii,:),'m_set{ii},'MarkerSize',4)
+
+
+
+% Plot lines
+plot(h,r2,G2)
+
+
+% Hold off
+hold(h,'off');
+xlim(h,[0,0.05])
+
+end
+

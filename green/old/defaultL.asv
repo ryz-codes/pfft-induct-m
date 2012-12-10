@@ -1,0 +1,143 @@
+function [L] = defaultL(SELECT)
+%DEFAULTL Summary of this function goes here
+%   Detailed explanation goes here
+L = struct;
+
+% General parameters
+L.w = 2*pi*2e4;
+L.mu = 4*pi*1e-7;
+
+if SELECT ==1;
+    %---------------------------------------------------------------------- 
+    %  Coil below interface
+    %----------------------------------------------------------------------  
+
+    % Define region
+    L.layerN = 2;
+
+    % Layer 1 (approaching from -inf)
+    L.names{1} = 'Air containing coil';
+    L.mu_r(1) = 1;
+    L.zN(1) = 1800;
+    L.bnds(1) = -0.5; % boundary below
+    L.sig(1) = 0;
+
+    % Layer 2
+    L.names{2} = 'Cast Iron (from Acero)';
+    L.mu_r(2) = 130;
+    L.zN(2) = 500;
+    L.sig(2) = 8e6;
+    skin_d = sqrt(2/L.w/L.sig(2)/L.mu_r(2)/L.mu);
+    L.bnds(2) = 0; 
+
+    % Upper bound
+    L.bnds(3) = 5*skin_d;
+
+    % Excitation
+    L.coil_layer = 1;
+end
+if SELECT == 2
+    %---------------------------------------------------------------------- 
+    %  Coil above interface
+    %----------------------------------------------------------------------
+
+    % Define region
+    L.layerN = 2;
+
+    % Layer 1 (approaching from -inf)
+    L.names{1} = 'Cast Iron (from Acero)';
+    L.mu_r(1) = 130;
+    L.zN(1) = 500;
+    L.sig(1) = 8e6;
+    skin_d = sqrt(2/L.w/L.sig(1)/L.mu_r(1)/L.mu);
+    L.bnds(1) = -5*skin_d;
+    
+    % Layer 2
+    L.names{2} = 'Air containing coil';
+    L.mu_r(2) = 1;
+    L.zN(2) = 1800;
+    L.sig(2) = 0;    
+    L.bnds(2) = 0; 
+
+    % Upper bound
+    L.bnds(3) = 0.5;
+
+    % Excitation
+    L.coil_layer = 2;
+end
+
+if SELECT == 3
+    %---------------------------------------------------------------------- 
+    %  Coil above interface with coarse mesh above air layer
+    %----------------------------------------------------------------------
+
+    % Define region
+    L.layerN = 3;
+
+    % Layer 1 (approaching from -inf)
+    L.names{1} = 'Cast Iron (from Acero)';
+    L.mu_r(1) = 130;
+    L.zN(1) = 500;
+    L.sig(1) = 8e6;
+    skin_d = sqrt(2/L.w/L.sig(1)/L.mu_r(1)/L.mu);
+    L.bnds(1) = -5*skin_d;
+    
+    % Layer 2
+    L.names{2} = 'Air containing coil';
+    L.mu_r(2) = 1;
+    L.zN(2) = 1000;
+    L.sig(2) = 0;    
+    L.bnds(2) = 0; 
+    
+    % Layer 3
+    L.names{3} = 'Coarsely meshed air';
+    L.mu_r(3) = 1;
+    L.zN(3) = 500;
+    L.sig(3) = 0;    
+    L.bnds(3) = 0.05; 
+
+    % Upper bound
+    L.bnds(4) = 0.5;
+
+    % Excitation
+    L.coil_layer = 2;
+end
+
+if SELECT ==4;
+    %---------------------------------------------------------------------- 
+    %  Coil below interface
+    %----------------------------------------------------------------------  
+
+    % Define region
+    L.layerN = 3;
+
+    % Layer 1 (approaching from -inf)
+    L.names{1} = 'Coarsely meshed air';
+    L.mu_r(1) = 1;
+    L.zN(1) = 500;
+    L.bnds(1) = -1; % boundary below
+    L.sig(1) = 0;
+    
+    % Layer 2
+    L.names{2} = 'Air containing coil';
+    L.mu_r(2) = 1;
+    L.zN(2) = 100;
+    L.bnds(2) = -0.05; % boundary below
+    L.sig(2) = 0;
+
+    % Layer 3
+    L.names{3} = 'Cast Iron (from Acero)';
+    L.mu_r(3) = 130;
+    L.zN(3) = 500;
+    L.sig(3) = 8e6;
+    skin_d = sqrt(2/L.w/L.sig(3)/L.mu_r(3)/L.mu);
+    L.bnds(3) = 0; 
+
+    % Upper bound
+    L.bnds(4) = 5*skin_d;
+
+    % Excitation
+    L.coil_layer = 2;
+end
+end
+

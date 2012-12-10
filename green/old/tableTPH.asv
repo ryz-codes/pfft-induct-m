@@ -1,0 +1,52 @@
+function [ output_args ] = tableTPH(L)
+%TABLETPH Given the layer structure L, makes a T+H lookup table for the
+%layer selected by the flag coil_layer.
+% SYSTEM CONSTANTS
+INTERP_COLS = 6;
+
+% Identify coil layer
+coil_layer = L.coil_layer;     
+zN = L.zN(coil_layer);
+
+% Assert that this layer can contain the coil
+assert(L.sig(coil_layer)==0 &&...
+    L.mu_r(coil_layer)==1, 'Coil layer must be free-space!');
+
+% Identify upper and lower boundaries
+bnd_a = L.bnds(coil_layer+1);
+bnd_b = L.bnds(coil_layer);
+
+% Make the "box" 95% of the way to either boundary.
+z_val = linspace(bnd_b,bnd_a,zN);
+z = z_val(round(0.05*zN):round(0.95*zN));
+
+% Distribute runs evenly between two ends
+N = length(z);
+ip = round(linspace(1,N,INTERP_COLS));
+
+A = cell(INTERP_COLS,1);
+for ii = 1:INTERP_COLS
+    A{ii} = edd2([z(1),z(N)],z(ip(ii)));
+end
+
+% Do each r value
+Tr = [];
+Hr = [];
+for ii = 1:length(r)
+    G = [Abot(ii,:);A2(ii,:);A3(ii,:);A4(ii,:);A5(ii,:);Atop(ii,:)].';
+    [Tr1 Hr1] = splitTPH(G,ip);
+    Tr = [Tr Tr1];
+    Hr = [Hr Hr1];
+end
+
+% smudge the first r point to make it zero
+r(1) = 0;
+
+%%
+zh = linspace(2*z(1),2*z(N),2*N-1);
+zt = linspace(0,z(N)-z(1),N);
+
+
+
+end
+
