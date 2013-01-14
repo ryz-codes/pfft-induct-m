@@ -8,7 +8,6 @@ persistent r1
 persistent I
 %% Prepare Kernel
 if isempty(I)
-    addpath([pwd '/hankel']) % Include the package
     [~,k1,r1,I]=fht(@(x) 1,5,10000,0);
 end
 

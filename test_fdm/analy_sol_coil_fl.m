@@ -8,7 +8,6 @@ persistent r1
 persistent I
 %% Prepare Kernel
 if isempty(I)
-    addpath([pwd '/hankel']) % Include the package
     [~,k1,r1,I]=fht(@(x) 1,R*10,2*pi*100/R,1);
     disp('Recalculating kernel for FL');
 end

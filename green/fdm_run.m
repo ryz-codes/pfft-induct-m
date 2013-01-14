@@ -47,7 +47,7 @@ rN = 60;
 rbnd = 1;
 
 % Non-uniform grid polynomial order
-ord = 3;
+ord = 1;
 
 %% IMPORT DATA FROM STRUCT
 % Read "defaultL.m" for details on these variables
