@@ -47,7 +47,7 @@ rN = 60;
 rbnd = 1;
 
 % Non-uniform grid polynomial order
-ord = 1;
+ord = 3;
 
 %% IMPORT DATA FROM STRUCT
 % Read "defaultL.m" for details on these variables
@@ -117,14 +117,14 @@ b_ent = [];
 b_rows = [];
 if ~isempty(bnd_above)
     b_ent = [b_ent;
-        mu./4./pi./sqrt(r.^2 + (bnd_above - zp).^2);
-        mu./4./pi.*(zp - bnd_above)./(sqrt(r.^2 + (bnd_above -zp).^2).^3)];
+        1./sqrt(r.^2 + (bnd_above - zp).^2);
+        1.*(zp - bnd_above)./(sqrt(r.^2 + (bnd_above -zp).^2).^3)];
     b_rows = [b_rows, bnd_a_ind+(1:(2*rN))];
 end
 if ~isempty(bnd_below)
     b_ent = [b_ent;
-        -mu./4./pi./sqrt(r.^2 + (bnd_below - zp).^2);
-        -mu./4./pi.*(zp - bnd_below)./(sqrt(r.^2 + (bnd_below -zp).^2).^3)];
+        -1./sqrt(r.^2 + (bnd_below - zp).^2);
+        -1.*(zp - bnd_below)./(sqrt(r.^2 + (bnd_below -zp).^2).^3)];
     b_rows = [b_rows, bnd_b_ind+(1:(2*rN))];
 end
 
@@ -143,7 +143,7 @@ else
 end
 
 % Output
-xout = x(:,ind1:ind2);
+xout = x(:,ind1:ind2)*mu./4./pi; %normalize to mu/4pi
 rout = r;
 zout = z_val(ind1:ind2);
 
@@ -222,7 +222,7 @@ zout = z_val(ind1:ind2);
     %----------------------------------------------------------------------
         B = kron([1 -2 1]./dz^2,ones(zN,1));
         Az = spdiags(B,[-1 0 1],zN,zN);    
-    
+        
         A = kron(speye(zN),Ar)+kron(Az,speye(rN));
         if nargin == 4 && psn ~= 0
             A = A + psn*speye(rN*zN);
