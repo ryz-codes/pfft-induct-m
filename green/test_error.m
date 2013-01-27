@@ -100,6 +100,7 @@ loglog(r,abs(real(A1)),r,abs(real(A2)),r,abs(real(A1)-real(A2)));
 subplot(212)
 loglog(r,abs(imag(A1)),r,abs(imag(A2)),r,abs(imag(A1)-imag(A2)));
 
+
 %% Error estimates
 abs_err = norm(A2-A1,inf);
 rel_err = abs_err/norm(A2,inf);
