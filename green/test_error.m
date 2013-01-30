@@ -12,8 +12,7 @@ end
 %% Pick the right layer configuration
 % Calculate using the FDM
 fprintf('Running FDM...\n');
-[A1 r z_actual] = fdm_run(z,zp,L);
-z = z_actual;
+[A1 r] = fdm_run(z,zp,L);
 
 %% Prepare Kernel
 mu=1e-7*4*pi;

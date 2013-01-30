@@ -56,39 +56,42 @@ mu = L.mu;             zN = L.zN;         coil_layer = L.coil_layer;
 layerN = L.layerN;     bnds = L.bnds; 
 
 %% MAIN FUNCTION
-% Make a vector of z values and boundaries
-z_val = [];
-bnd_ind = zeros(layerN,2); % index of the upper and lower boundaries
-for ii = 1:layerN
-    temp = linspace(bnds(ii),bnds(ii+1),zN(ii));
-    dz(ii) = temp(2) - temp(1); % figure out the spacing
-    
-    bnd_ind(ii,1) = length(z_val)+1; % first index in this layer
-    bnd_ind(ii,2) = length(z_val)+zN(ii); % last index in this layer
-    z_val = [z_val, temp];
-end
+
+% Error check before doing all the work!
+assert(all(z_range<=bnds(coil_layer+1)), 'z goes out of upper bound!')
+assert(all(z_range>=bnds(coil_layer)), 'z goes out of lower bound!')
 
 % Make A block for each layer region
 Alay = cell(layerN,1);
 psn = -1j*w*mu.*sig.*mu_r; % poisson factors
 
+% Make a vector of z values and boundaries
+z_cell = cell(1,layerN);
+bnd_ind = zeros(layerN,2); % index of the upper and lower boundaries
+counter = 0;
+
 [Ar r] = blk_ar; % radial blocks
-for ii = 1:layerN
-    Alay{ii} = blk_asm(Ar,zN(ii),dz(ii),psn(ii));
-    % delete two z elements to make space for one boundary on each side
+for ii = 1:layerN 
+    z_cell{ii} = linspace(bnds(ii),bnds(ii+1),zN(ii));
+    bnd_ind(ii,1) = counter+1; % first index in this layer
+    bnd_ind(ii,2) = counter+zN(ii); % last index in this layer
+    counter = counter + zN(ii);
+    
+    % Create domain blocks
+    Alay{ii} = blk_asm(Ar,z_cell{ii},psn(ii));
 end
 
 % Enforce boundary conditions
-fac = 1./dz./mu_r; % boundary factors
+fac = 1./mu_r; % boundary factors
 A = Alay{1};
 for ii = 2:layerN
-    A = blk_bnd(A,Alay{ii},fac([ii-1,ii]));
+    A = blk_bnd(A,Alay{ii},z_cell{ii-1},z_cell{ii},fac(ii-1),fac(ii));
 end
 A = blk_dirichlet(A);
 
 % DEBUG, make sure that z_val and A match or else all index extraction are
 % wrong
-assert((length(A)/rN) == length(z_val));
+assert((length(A)/rN) == counter);
 
 % Find the excitation boundaries
 bnd_above = bnds(coil_layer+1);
@@ -129,18 +132,15 @@ b = sparse(b_rows,1,b_ent,length(A),1);
 x = A \ b;
 x = reshape(x,rN,[]);
 
-% Extract the answer
-ind1 = find(z_val<=z_range(1),1,'last');
-if numel(z_range) == 2
-    ind2 = find(z_val<=z_range(2),1,'last');
-else
-    ind2 = ind1;
-end
+% Extract the results in the coil layer
+xout = x(:,bnd_ind(coil_layer,1):bnd_ind(coil_layer,2));
+xout = xout*1e-7; %normalize to mu/4pi
 
-% Output
-xout = x(:,ind1:ind2)*mu./4./pi; %normalize to mu/4pi
+% Interpolate
 rout = r;
-zout = z_val(ind1:ind2);
+xout = interp1(z_cell{coil_layer},xout.',z_range,'cubic');
+xout = xout.';
+zout = z_range;
 
     
     function [Ar r] = blk_ar()
@@ -179,13 +179,13 @@ zout = z_val(ind1:ind2);
         r_dif = 1./(2*rbnd*dx .* r .* (ord*xi.^(ord-1)));
 
         % Diagonals written in a full flat matrix
-        B = [r_fwd  +  r_dif, ...
-             r_rev  -  r_dif, ...
-             -r_fwd -  r_rev];
+        B = [r_rev  -  r_dif, ...
+             -r_rev -  r_fwd, ...
+             r_fwd +  r_dif];
 
         % Form (rN-1) x rN matrix without x=end+1 row to implicitly enforce Dirichlet.
         Ar = spdiags(B(2:end,:), ...
-            [2 0 1], rN-1,rN);
+            [0 1 2], rN-1,rN);
 
         % Enfore Neuman condition at x=0. Construct the matrix without
         % that row, then ENFORCE: x(0) = x(1).
@@ -197,7 +197,7 @@ zout = z_val(ind1:ind2);
     end
 
         
-    function A = blk_asm(Ar, zN, dz, psn)
+    function A = blk_asm(Ar, z, psn)
     %--------------------------------------------------------------------------
     % BLK_ASM Assembles the domain block of rNzN x rNzN matrix, with an 
     % optional poisson term. Implements the PDE
@@ -215,21 +215,27 @@ zout = z_val(ind1:ind2);
     %      A - the full rNzN x rNzN FDM A matrix for the two dimensional 
     %           block.
     %----------------------------------------------------------------------
-        B = kron([1 -2 1]./dz^2,ones(zN-2,1));
-        Az = spdiags(B,[0 1 2],zN-2,zN);    
+        zN1 = length(z);
+    
+        % Calculate the coefficients
+        B = zeros(zN1-2,3);
+        for ij = 1:length(B)
+            B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
+        end
+        Az = spdiags(B,[0 1 2],zN1-2,zN1);    
         
         % Indentity matrices to be kroneckered
-        Areye = spdiags(ones(zN-2,1),1,zN-2,zN);
+        Areye = spdiags(ones(zN1-2,1),1,zN1-2,zN1);
         Azeye = speye(rN);
         
         A = kron(Areye,Ar)+kron(Az,Azeye);
-        if nargin == 4 && psn ~= 0
+        if nargin == 3 && psn ~= 0
             A = A + psn*kron(Areye,Azeye);
         end
 
     end
 
-    function A = blk_bnd(A1,A2,fac)
+    function A = blk_bnd(A1,A2,z1,z2,fac1,fac2)
     %--------------------------------------------------------------------------
     % BLK_BND Implements the continuity and gradient continuity boundary 
     % conditions:
@@ -256,6 +262,7 @@ zout = z_val(ind1:ind2);
     %      A - the full FDM A matrix for the two dimensional 
     %           block.
     %----------------------------------------------------------------------
+    
         % Retrieve the number of z elements
         zN1 = length(A1)/rN; % number of z elements in A1
         zN2 = length(A2)/rN; % number of z elements in A2
@@ -269,9 +276,16 @@ zout = z_val(ind1:ind2);
         % Gradient continuity boundary condition
         %             zN1 zN2
         % [0 0 ... 1  -1  -1  1 ... 0 0]
-        Arows = ones(4,1);
-        Acols = zN1+[-1,0,1,2]; % first order derivative
-        Aents = [[1,-1]*fac(1) , [-1,1]*fac(2)];
+        ORDER = 2; % Gradient prediction FDM polynomial order
+        sel_z1 = z1(end-ORDER:end); 
+        sel_z2 = z2(1:1+ORDER);
+        
+        Arows = ones(2*(ORDER+1),1);
+        Acols = zN1+(-ORDER:ORDER+1);
+        c1 = fdcoeffF(1,sel_z1(end),sel_z1); % coefficients for d/dz A1
+        c2 = fdcoeffF(1,sel_z2(1),sel_z2); % coefficients for d/dz A2
+        Aents = [-c1*fac1, c2*fac2];
+        
         Abnd2 = sparse(Arows,Acols,Aents,1,zN1+zN2);
         Abnd2 = kron(Abnd2, speye(rN));
         
