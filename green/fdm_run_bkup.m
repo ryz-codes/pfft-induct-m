@@ -73,18 +73,23 @@ Alay = cell(layerN,1);
 psn = -1j*w*mu.*sig.*mu_r; % poisson factors
 
 [Ar r] = blk_ar; % radial blocks
-for ii = 1:layerN
-    Alay{ii} = blk_asm(Ar,zN(ii),dz(ii),psn(ii));
-    % delete two z elements to make space for one boundary on each side
+if layerN >2
+    for ii = 2:(layerN-1)
+        Alay{ii} = blk_asm(Ar,zN(ii)-2,dz(ii),psn(ii));
+        % delete two z elements to make space for one boundary on each side
+    end
+end
+for ii = [1,layerN]
+    Alay{ii} = blk_asm(Ar,zN(ii)-1,dz(ii),psn(ii));
+    % delete one z element to make space for the boundary.
 end
 
-% Enforce boundary conditions
+% Connect the boundaries
 fac = 1./dz./mu_r; % boundary factors
 A = Alay{1};
 for ii = 2:layerN
     A = blk_bnd(A,Alay{ii},fac([ii-1,ii]));
 end
-A = blk_dirichlet(A);
 
 % DEBUG, make sure that z_val and A match or else all index extraction are
 % wrong
@@ -199,7 +204,7 @@ zout = z_val(ind1:ind2);
         
     function A = blk_asm(Ar, zN, dz, psn)
     %--------------------------------------------------------------------------
-    % BLK_ASM Assembles the domain block of rNzN x rNzN matrix, with an 
+    % BLK_ASM Assembles the full block of rNzN x rNzN matrix, with an 
     % optional poisson term. Implements the PDE
     %          Ar + d2/dz2 A + psn A = 0
     %
@@ -215,16 +220,12 @@ zout = z_val(ind1:ind2);
     %      A - the full rNzN x rNzN FDM A matrix for the two dimensional 
     %           block.
     %----------------------------------------------------------------------
-        B = kron([1 -2 1]./dz^2,ones(zN-2,1));
-        Az = spdiags(B,[0 1 2],zN-2,zN);    
+        B = kron([1 -2 1]./dz^2,ones(zN,1));
+        Az = spdiags(B,[-1 0 1],zN,zN);    
         
-        % Indentity matrices to be kroneckered
-        Areye = spdiags(ones(zN-2,1),1,zN-2,zN);
-        Azeye = speye(rN);
-        
-        A = kron(Areye,Ar)+kron(Az,Azeye);
+        A = kron(speye(zN),Ar)+kron(Az,speye(rN));
         if nargin == 4 && psn ~= 0
-            A = A + psn*kron(Areye,Azeye);
+            A = A + psn*speye(rN*zN);
         end
 
     end
@@ -259,38 +260,25 @@ zout = z_val(ind1:ind2);
         % Retrieve the number of z elements
         zN1 = length(A1)/rN; % number of z elements in A1
         zN2 = length(A2)/rN; % number of z elements in A2
-        
-        % Continuity boundary condition
-        %             zN1 zN2
-        % [0 0 ... 0  -1   1  0 ... 0 0]
-        Abnd1 = sparse([1,1],zN1+[0,1],[-1,1],1,zN1+zN2);
-        Abnd1 = kron(Abnd1, speye(rN));
-
-        % Gradient continuity boundary condition
-        %             zN1 zN2
-        % [0 0 ... 1  -1  -1  1 ... 0 0]
-        Arows = ones(4,1);
-        Acols = zN1+[-1,0,1,2]; % first order derivative
-        Aents = [[1,-1]*fac(1) , [-1,1]*fac(2)];
-        Abnd2 = sparse(Arows,Acols,Aents,1,zN1+zN2);
-        Abnd2 = kron(Abnd2, speye(rN));
-        
-        % Combine
-        A = [A1, sparse(rN*(zN1-2),rN*zN2);
-            Abnd1;
-            Abnd2;
-            sparse(rN*(zN2-2), rN*zN1), A2];
-    end
     
-    function A = blk_dirichlet(A)
-    %----------------------------------------------------------------------
-    % BLK_DIRICHLET Caps the top and bottom row of A with Dirichlet
-    % conditions
-    %----------------------------------------------------------------------
-        totzN = length(A)/rN;
-        Abnd1 = spdiags(ones(rN,1),0,rN,length(A));
-        Abnd2 = spdiags(ones(rN,1),(totzN-1)*rN,rN,length(A));
-        A = [Abnd1; A; Abnd2];
+        % Retrieve the d2/dz2 factors
+        z_fac1 = A1(end, end-rN);
+        z_fac2 = A2(1, 1+rN);
+        
+        % Make the boundary matrices
+        Arows = zN1+[0,1,1,2,2,2,2,3];
+        Acols = zN1+[1,1,2,0,1,2,3,2];
+        Aents = [z_fac1, ...
+                -1,1, ...
+                [1,-1]*fac(1) , [-1,1]*fac(2), ...
+                z_fac2];
+        Abnd = sparse(Arows,Acols,Aents,zN1+zN2+2,zN1+zN2+2);
+        Abnd = kron(Abnd, speye(rN));
+
+        % Combine
+        A = blkdiag(A1, sparse(rN*2,rN*2), A2);
+        A = A + Abnd;
     end
+
 end
 
