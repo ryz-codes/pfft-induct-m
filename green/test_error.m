@@ -6,7 +6,7 @@ function [rel_err, abs_err] = test_error(z, zp, L)
 if nargin ==0
 z = 1e-3;
 zp = 5e-3;
-L = defaultL(2);
+L = defaultL(5);
 end
 
 %% Pick the right layer configuration

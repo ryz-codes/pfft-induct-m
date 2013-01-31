@@ -72,13 +72,21 @@ counter = 0;
 
 [Ar r] = blk_ar; % radial blocks
 for ii = 1:layerN 
-    z_cell{ii} = linspace(bnds(ii),bnds(ii+1),zN(ii));
     bnd_ind(ii,1) = counter+1; % first index in this layer
     bnd_ind(ii,2) = counter+zN(ii); % last index in this layer
     counter = counter + zN(ii);
     
     % Create domain blocks
-    Alay{ii} = blk_asm(Ar,z_cell{ii},psn(ii));
+    if ii==1
+        temp = 2;
+    elseif ii ==layerN
+        temp = 1;
+    else
+        temp = 3;
+    end
+    [Alay{ii}, z_cell{ii}] = ... 
+        blk_asm(Ar,zN(ii),[bnds(ii),bnds(ii+1)], temp,...
+                 psn(ii));
 end
 
 % Enforce boundary conditions
@@ -197,7 +205,7 @@ zout = z_range;
     end
 
         
-    function A = blk_asm(Ar, z, psn)
+    function [A z] = blk_asm(Ar, zN, bnds, style, psn)
     %--------------------------------------------------------------------------
     % BLK_ASM Assembles the domain block of rNzN x rNzN matrix, with an 
     % optional poisson term. Implements the PDE
@@ -215,21 +223,38 @@ zout = z_range;
     %      A - the full rNzN x rNzN FDM A matrix for the two dimensional 
     %           block.
     %----------------------------------------------------------------------
-        zN1 = length(z);
+        switch style
+            case 0 % uniformly spaced
+                z = linspace(bnds(1),bnds(2),zN);
+            case 1 % non-uniform, boundary near bnds(1).
+                xi = linspace(0,1,zN);
+                zbnd = bnds(2)-bnds(1);
+                z = zbnd*xi.^ord+bnds(1);
+            case 2 % non-uniform, boundary near bnds(2).
+                xi = linspace(0,1,zN);
+                zbnd = bnds(1)-bnds(2);
+                z = zbnd*xi(end:-1:1).^ord+bnds(2);
+            case 3 % non-unitform, boundary at both sides     
+                xi = linspace(0,pi/2,zN);
+                zbnd = bnds(2)-bnds(1);
+                z = zbnd*sin(xi).^ord+bnds(1);
+            otherwise
+                error('Unknown style');
+        end     
     
         % Calculate the coefficients
-        B = zeros(zN1-2,3);
+        B = zeros(zN-2,3);
         for ij = 1:length(B)
             B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
         end
-        Az = spdiags(B,[0 1 2],zN1-2,zN1);    
+        Az = spdiags(B,[0 1 2],zN-2,zN);    
         
         % Indentity matrices to be kroneckered
-        Areye = spdiags(ones(zN1-2,1),1,zN1-2,zN1);
+        Areye = spdiags(ones(zN-2,1),1,zN-2,zN);
         Azeye = speye(rN);
         
         A = kron(Areye,Ar)+kron(Az,Azeye);
-        if nargin == 3 && psn ~= 0
+        if nargin == 5 && psn ~= 0
             A = A + psn*kron(Areye,Azeye);
         end
 
