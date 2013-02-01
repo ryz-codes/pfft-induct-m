@@ -1,10 +1,11 @@
 # matlab data
-.mat
+*.mat
 # matlab plots
 #.fig - shouldn't ignore, because guis are built on figs.
-.png
-.psd
-.eps
+*.png
+*.psd
+*.eps
 # matlab autosaves
-.asv
-.m~
+*.m~
+*.asv
+*.tmp

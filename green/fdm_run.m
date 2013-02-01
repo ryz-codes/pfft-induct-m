@@ -142,7 +142,7 @@ x = reshape(x,rN,[]);
 
 % Extract the results in the coil layer
 xout = x(:,bnd_ind(coil_layer,1):bnd_ind(coil_layer,2));
-xout = xout*1e-7; %normalize to mu/4pi
+xout = full(xout)*1e-7; %normalize to mu/4pi
 
 % Interpolate
 rout = r;
@@ -182,8 +182,9 @@ zout = z_range;
         % 1 x rN row matrices of the entries involved.
         % r_fwd and r_rev to deal with the second derivative
         % r_dif to deal with the first derivative
-        r_fwd = 1./(ord*(xi+dx/2).^(ord-1).*(ord*xi.^(ord-1)).*dx^2.*rbnd^2);
-        r_rev = 1./(ord*(xi-dx/2).^(ord-1).*(ord*xi.^(ord-1)).*dx^2.*rbnd^2);
+        my_fac = 1/(ord.^2.*dx^2.*rbnd^2);
+        r_fwd = ((xi+dx/2).*xi).^(1-ord)*my_fac;
+        r_rev = ((xi-dx/2).*xi).^(1-ord)*my_fac;
         r_dif = 1./(2*rbnd*dx .* r .* (ord*xi.^(ord-1)));
 
         % Diagonals written in a full flat matrix
@@ -191,6 +192,13 @@ zout = z_range;
              -r_rev -  r_fwd, ...
              r_fwd +  r_dif];
 
+%         for ij = 2:rN-1
+%             B(ij,:) = fdcoeffF(2,r(ij),r(ij-1:ij+1)) ...
+%                       + 1./r(ij)*fdcoeffF(1,r(ij),r(ij-1:ij+1));
+%         end
+%         B(rN,:) = fdcoeffF(2,r(end),r(end-2:end)) ...
+%                       + 1./r(end)*fdcoeffF(1,r(end),r(end-2:end));
+        
         % Form (rN-1) x rN matrix without x=end+1 row to implicitly enforce Dirichlet.
         Ar = spdiags(B(2:end,:), ...
             [0 1 2], rN-1,rN);
@@ -226,27 +234,67 @@ zout = z_range;
         switch style
             case 0 % uniformly spaced
                 z = linspace(bnds(1),bnds(2),zN);
+                
+                B = zeros(zN-2,3);
+                for ij = 1:length(B)
+                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
+                end
             case 1 % non-uniform, boundary near bnds(1).
                 xi = linspace(0,1,zN);
+                dx = xi(2)-xi(1);
                 zbnd = bnds(2)-bnds(1);
                 z = zbnd*xi.^ord+bnds(1);
+                
+                my_fac = 1/(ord.^2.*dx^2.*zbnd^2);
+                r_fwd = ((xi+dx/2).*xi).^(1-ord)*my_fac;
+                r_rev = ((xi-dx/2).*xi).^(1-ord)*my_fac;
+
+                % Diagonals written in a full flat matrix
+                B = [r_rev; ...
+                     -r_rev -  r_fwd; ...
+                     r_fwd].';
+                B = B(2:end-1,:);
+                B(1,:) = fdcoeffF(2,z(2),z(1:3));
+                 
+                B = zeros(zN-2,3);
+                for ij = 1:length(B)
+                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
+                end
             case 2 % non-uniform, boundary near bnds(2).
                 xi = linspace(0,1,zN);
+                dx = xi(2)-xi(1);
                 zbnd = bnds(1)-bnds(2);
-                z = zbnd*xi(end:-1:1).^ord+bnds(2);
+                z = zbnd*(1-xi).^ord+bnds(2);
+                
+                my_fac = 1/(ord.^2.*dx^2.*zbnd^2);
+                r_fwd = ((1-xi-dx/2).*(1-xi)).^(1-ord)*my_fac;
+                r_rev = ((1-xi+dx/2).*(1-xi)).^(1-ord)*my_fac;
+
+                % Diagonals written in a full flat matrix
+                B = [r_rev; ...
+                     -r_rev -  r_fwd; ...
+                     r_fwd].';
+                B = B(2:end-1,:);
+                B(end,:) = fdcoeffF(2,z(end-1),z(end-2:end));
+                
+                B = zeros(zN-2,3);
+                for ij = 1:length(B)
+                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
+                end
             case 3 % non-unitform, boundary at both sides     
                 xi = linspace(0,pi/2,zN);
                 zbnd = bnds(2)-bnds(1);
                 z = zbnd*sin(xi).^ord+bnds(1);
+                
+                B = zeros(zN-2,3);
+                for ij = 1:length(B)
+                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
+                end
             otherwise
                 error('Unknown style');
         end     
     
         % Calculate the coefficients
-        B = zeros(zN-2,3);
-        for ij = 1:length(B)
-            B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
-        end
         Az = spdiags(B,[0 1 2],zN-2,zN);    
         
         % Indentity matrices to be kroneckered
