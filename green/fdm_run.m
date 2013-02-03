@@ -11,24 +11,27 @@ function [xout rout zout] = fdm_run(z_range,zp,L)
 %       J = delta(x) delta(y) delta(z-zp) 
 %
 % This excitation is achieved through boundary conditions rather than 
-% domain functions.
+% domain functions. The solution is obtained by solving the homogenous
+% equation:
+%       dA/dr + r d2A/dr2 + r d2A/dz2 - r jw mu sigma A = 0
 %
-% Non-uniform FDM techniques were used according to 
-%   Eugenia Kálnay de Rivas, "On the use of nonuniform grids in 
-%   finite-difference equations", Journal of Computational Physics, 
-%   Volume 10, Issue 2, October 1972, Pages 202-210
-% with a polynomial grid structure. 
-% 
+% With the above boundary conditions everywhere except at the border
+% between the coil layer and neighboring layers.
+%
 % Inputs:
+%    zp   - the z value of the source point, with respect to the origin
+%           defined in L.
+%    z_range - the z value of the field-point(s).
 %    L    - the definitions of the multilayered structure (see defaultL for 
 %           descriptions of fields)
 %
 % Outputs:
-%    g    - A green's function table object. The table can be accessed by
-%           typing the following command:
-%                   G = g.lookup(r,z,zp);
+%    xout - the solution given as a two-dimensional non-uniform grid
+%    rout - the radial intervals
+%    zout - [Deprecated] gives the z-directional intervals, but is now
+%           identical to z_range
 % 
-% Other m-files required: fdm_run (the fdm algorithm that generates the table)
+% Other m-files required: fdcoeffF.m (generates fdm coefficients)
 % Subfunctions: none
 % MAT-files required: none
 %
@@ -38,16 +41,16 @@ function [xout rout zout] = fdm_run(z_range,zp,L)
 % Author: Richard Y Zhang
 % Massachusetts Institute of Technology
 % Email: ryz@mit.edu  
-% Oct 2012; Last revision: 8th Oct 2012
+% Oct 2012; Last revision: 3rd Feb 2013
 
 
 %% SYSTEM DEFAULTS
 % Definition the radial FDM grid
-rN = 60;
-rbnd = 1;
+rN = 200;
+rbnd = 10;
 
 % Non-uniform grid polynomial order
-ord = 3;
+ord = 4;
 
 %% IMPORT DATA FROM STRUCT
 % Read "defaultL.m" for details on these variables
@@ -61,6 +64,9 @@ layerN = L.layerN;     bnds = L.bnds;
 assert(all(z_range<=bnds(coil_layer+1)), 'z goes out of upper bound!')
 assert(all(z_range>=bnds(coil_layer)), 'z goes out of lower bound!')
 
+%--------------------------------------------------------------------------
+% FORM LEFT HAND SIDE
+%--------------------------------------------------------------------------
 % Make A block for each layer region
 Alay = cell(layerN,1);
 psn = -1j*w*mu.*sig.*mu_r; % poisson factors
@@ -101,6 +107,9 @@ A = blk_dirichlet(A);
 % wrong
 assert((length(A)/rN) == counter);
 
+%--------------------------------------------------------------------------
+% FORM RIGHT HAND SIDE
+%--------------------------------------------------------------------------
 % Find the excitation boundaries
 bnd_above = bnds(coil_layer+1);
 bnd_below = bnds(coil_layer);
@@ -108,13 +117,9 @@ bnd_a_ind = rN*(bnd_ind(coil_layer,2)-1);
 bnd_b_ind = rN*(bnd_ind(coil_layer,1)-2);
 
 % Logic for doing boundary above or below
-if coil_layer == 1 %|| ... Coils is at the bottom or...
-        %(mu_r(coil_layer-1)==1 && sig(coil_layer-1)==0) 
-        % next layer is air (assume air forever)
+if coil_layer == 1
     bnd_below = [];
-elseif coil_layer == layerN% || ... Coil is at the top or...
-        %(mu_r(coil_layer+1)==1 && sig(coil_layer+1)==0) 
-        % next layer is air (assume air forever)
+elseif coil_layer == layerN
     bnd_above = [];
 end    
 
@@ -136,6 +141,9 @@ end
 
 b = sparse(b_rows,1,b_ent,length(A),1);
 
+%--------------------------------------------------------------------------
+% SOLVE, INTERPOLATE AND GIVE RESULTS
+%--------------------------------------------------------------------------
 % Back substitute
 x = A \ b;
 x = reshape(x,rN,[]);
@@ -154,16 +162,11 @@ zout = z_range;
     function [Ar r] = blk_ar()
     %----------------------------------------------------------------------
     % BLK_AR Generates one block of rN x rN matrix for the PDE
-    %         d2/dr2 + 1/r d/dr A = 0 
+    %         r d2/dr2 + d/dr A = 0 
     % with non-uniform, polynomially spaced grid.
     %
     % The function implements a Neumann condition at r=0, and a Dirichlet
     % condition at r=rbnd
-    %
-    % Non-uniform FDM techniques were used according to 
-    %   Eugenia Kálnay de Rivas, "On the use of nonuniform grids in 
-    %   finite-difference equations", Journal of Computational Physics, 
-    %   Volume 10, Issue 2, October 1972, Pages 202-210 
     %
     % Inputs:
     %      rN - the number of elements to consider (global variable)
@@ -176,28 +179,15 @@ zout = z_range;
     %----------------------------------------------------------------------
         xi = linspace(0,1,rN).'; % Define a uniformly space variable xi.
         dx = xi(2)-xi(1); % Extract xi spacing.
-        r = (xi.^ord + 0.5./(rN-1).^ord) * rbnd; % Shift r to enforce Neumann
-        dr = r(2)-r(1); % Extract r spacing.
+        r = (xi.^ord) * rbnd; 
 
-        % 1 x rN row matrices of the entries involved.
-        % r_fwd and r_rev to deal with the second derivative
-        % r_dif to deal with the first derivative
-        my_fac = 1/(ord.^2.*dx^2.*rbnd^2);
-        r_fwd = ((xi+dx/2).*xi).^(1-ord)*my_fac;
-        r_rev = ((xi-dx/2).*xi).^(1-ord)*my_fac;
-        r_dif = 1./(2*rbnd*dx .* r .* (ord*xi.^(ord-1)));
-
-        % Diagonals written in a full flat matrix
-        B = [r_rev  -  r_dif, ...
-             -r_rev -  r_fwd, ...
-             r_fwd +  r_dif];
-
-%         for ij = 2:rN-1
-%             B(ij,:) = fdcoeffF(2,r(ij),r(ij-1:ij+1)) ...
-%                       + 1./r(ij)*fdcoeffF(1,r(ij),r(ij-1:ij+1));
-%         end
-%         B(rN,:) = fdcoeffF(2,r(end),r(end-2:end)) ...
-%                       + 1./r(end)*fdcoeffF(1,r(end),r(end-2:end));
+        B = zeros(rN,3);
+        for ij = 2:rN-1
+            B(ij,:) = r(ij)*fdcoeffF(2,r(ij),r(ij-1:ij+1)) ...
+                      + fdcoeffF(1,r(ij),r(ij-1:ij+1));
+        end
+        B(rN,:) = r(end)*fdcoeffF(2,r(end),r(end-2:end)) ...
+                      + fdcoeffF(1,r(end),r(end-2:end));
         
         % Form (rN-1) x rN matrix without x=end+1 row to implicitly enforce Dirichlet.
         Ar = spdiags(B(2:end,:), ...
@@ -205,10 +195,9 @@ zout = z_range;
 
         % Enfore Neuman condition at x=0. Construct the matrix without
         % that row, then ENFORCE: x(0) = x(1).
-        bnd_factor = 1/dr^2+1/(2*dr*r(1));
-        neu_bnd = sparse([1; 1],[1; 2],...
-            [-1; 1]*bnd_factor,...
-            1,rN);
+        TERMS = 3;
+        neu_bnd=sparse(ones(1,TERMS),1:TERMS,...
+            fdcoeffF(1,0,r(1:TERMS)),1,rN);
         Ar = [neu_bnd;Ar];
     end
 
@@ -217,14 +206,15 @@ zout = z_range;
     %--------------------------------------------------------------------------
     % BLK_ASM Assembles the domain block of rNzN x rNzN matrix, with an 
     % optional poisson term. Implements the PDE
-    %          Ar + d2/dz2 A + psn A = 0
+    %          Ar + r d2/dz2 A + r psn A = 0
     %
     % Implements the Dirichlet condition on both extremes of the z axis.
     % 
     % Inputs:
     %      Ar - the r-variational rNxrN FDM A matrix
     %      zN - the number of z elements to consider
-    %      dz - the uniform separation distance between z elements
+    %      bnds - the upper and lower bounds of that layer
+    %      style - non-uniform discretization style
     %      psn - the poisson term (optional)
     %
     % Outputs: 
@@ -234,72 +224,32 @@ zout = z_range;
         switch style
             case 0 % uniformly spaced
                 z = linspace(bnds(1),bnds(2),zN);
-                
-                B = zeros(zN-2,3);
-                for ij = 1:length(B)
-                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
-                end
             case 1 % non-uniform, boundary near bnds(1).
                 xi = linspace(0,1,zN);
-                dx = xi(2)-xi(1);
                 zbnd = bnds(2)-bnds(1);
                 z = zbnd*xi.^ord+bnds(1);
-                
-                my_fac = 1/(ord.^2.*dx^2.*zbnd^2);
-                r_fwd = ((xi+dx/2).*xi).^(1-ord)*my_fac;
-                r_rev = ((xi-dx/2).*xi).^(1-ord)*my_fac;
-
-                % Diagonals written in a full flat matrix
-                B = [r_rev; ...
-                     -r_rev -  r_fwd; ...
-                     r_fwd].';
-                B = B(2:end-1,:);
-                B(1,:) = fdcoeffF(2,z(2),z(1:3));
-                 
-                B = zeros(zN-2,3);
-                for ij = 1:length(B)
-                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
-                end
             case 2 % non-uniform, boundary near bnds(2).
                 xi = linspace(0,1,zN);
-                dx = xi(2)-xi(1);
                 zbnd = bnds(1)-bnds(2);
                 z = zbnd*(1-xi).^ord+bnds(2);
-                
-                my_fac = 1/(ord.^2.*dx^2.*zbnd^2);
-                r_fwd = ((1-xi-dx/2).*(1-xi)).^(1-ord)*my_fac;
-                r_rev = ((1-xi+dx/2).*(1-xi)).^(1-ord)*my_fac;
-
-                % Diagonals written in a full flat matrix
-                B = [r_rev; ...
-                     -r_rev -  r_fwd; ...
-                     r_fwd].';
-                B = B(2:end-1,:);
-                B(end,:) = fdcoeffF(2,z(end-1),z(end-2:end));
-                
-                B = zeros(zN-2,3);
-                for ij = 1:length(B)
-                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
-                end
             case 3 % non-unitform, boundary at both sides     
                 xi = linspace(0,pi/2,zN);
                 zbnd = bnds(2)-bnds(1);
                 z = zbnd*sin(xi).^ord+bnds(1);
-                
-                B = zeros(zN-2,3);
-                for ij = 1:length(B)
-                    B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
-                end
             otherwise
                 error('Unknown style');
         end     
     
         % Calculate the coefficients
+        B = zeros(zN-2,3);
+        for ij = 1:length(B)
+            B(ij,:) = fdcoeffF(2,z(ij+1),z(ij:ij+2));
+        end
         Az = spdiags(B,[0 1 2],zN-2,zN);    
         
         % Indentity matrices to be kroneckered
         Areye = spdiags(ones(zN-2,1),1,zN-2,zN);
-        Azeye = speye(rN);
+        Azeye = spdiags(r,0,rN,rN); % multiply d2/dz2 by r
         
         A = kron(Areye,Ar)+kron(Az,Azeye);
         if nargin == 5 && psn ~= 0
@@ -350,8 +300,8 @@ zout = z_range;
         %             zN1 zN2
         % [0 0 ... 1  -1  -1  1 ... 0 0]
         ORDER = 2; % Gradient prediction FDM polynomial order
-        sel_z1 = z1(end-ORDER:end); 
-        sel_z2 = z2(1:1+ORDER);
+        sel_z1 = z1(end-ORDER:end); % z values for points in region 1
+        sel_z2 = z2(1:1+ORDER); % z values for points in region 1
         
         Arows = ones(2*(ORDER+1),1);
         Acols = zN1+(-ORDER:ORDER+1);

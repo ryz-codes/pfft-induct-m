@@ -49,20 +49,20 @@ if SELECT == 2
     % Layer 1 (approaching from -inf)
     L.names{1} = 'Cast Iron (from Acero)';
     L.mu_r(1) = 130;
-    L.zN(1) = 500;
+    L.zN(1) = 200;
     L.sig(1) = 8e6;
     skin_d = sqrt(2/L.w/L.sig(1)/L.mu_r(1)/L.mu);
-    L.bnds(1) = -5*skin_d;
+    L.bnds(1) = -10*skin_d;
     
     % Layer 2
     L.names{2} = 'Air containing coil';
     L.mu_r(2) = 1;
-    L.zN(2) = 1800;
+    L.zN(2) = 200;
     L.sig(2) = 0;    
     L.bnds(2) = 0; 
 
     % Upper bound
-    L.bnds(3) = 0.5;
+    L.bnds(3) = 10;
 
     % Excitation
     L.coil_layer = 2;
@@ -162,40 +162,40 @@ if SELECT ==5;
     % Layer 1 (approaching from -inf)
     L.names{1} = 'Air';
     L.mu_r(1) = 1;
-    L.zN(1) = 800;
-    L.bnds(1) = -0.5; % boundary below
+    L.zN(1) = 100;
+    L.bnds(1) = -10; % boundary below
     L.sig(1) = 0;
     
     % Layer 2 (approaching from -inf)
     L.names{2} = 'Aluminium';
     L.mu_r(2) = 1;
-    L.zN(2) = 300;
+    L.zN(2) = 100;
     L.sig(2) = 3.5e7;
     L.bnds(2) = -(PLATE_THICK); % boundary below
     
     % Layer 3
     L.names{3} = 'Air containing coil';
     L.mu_r(3) = 1;
-    L.zN(3) = 800;
+    L.zN(3) = 200;
     L.bnds(3) = 0; % boundary below
     L.sig(3) = 0;
 
     % Layer 4
     L.names{4} = 'Aluminium';
     L.mu_r(4) = 1;
-    L.zN(4) = 300;
+    L.zN(4) = 100;
     L.sig(4) = 3.5e7;
     L.bnds(4) = SEP_DIST; 
     
     % Layer 5
     L.names{5} = 'Air';
     L.mu_r(5) = 1;
-    L.zN(5) = 800;
+    L.zN(5) = 100;
     L.bnds(5) = SEP_DIST+PLATE_THICK; % boundary below
     L.sig(5) = 0;
     
     % Upper bound
-    L.bnds(6) = 0.5;
+    L.bnds(6) = 10;
 
     % Excitation
     L.coil_layer = 3;

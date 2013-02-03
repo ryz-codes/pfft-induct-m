@@ -2,19 +2,41 @@ function [rel_err, abs_err] = test_error(z, zp, L)
 %TEST_ERROR Tests the FDM error for the half-space and 5-plate
 %configurations against analytical solutions
 %
+% Inputs:
+%    zp   - the z value of the source point, with respect to the origin
+%           defined in L.
+%    z_range - the z value of the field-point.
+%    L    - the definitions of the multilayered structure (see defaultL for 
+%           descriptions of fields). MUST EITHER HAVE 2 OR 5 LAYERS.
+%
+% Outputs:
+%    rel_err - relative error (infinity-norm).
+%    abs_err - absolute error (infinity-norm).
+% 
+% Other m-files required: fdm_run.m, quadht.m, fdcoeffF.m
+% Subfunctions: none
+% MAT-files required: none
+%
+% See also: fdm_run.m, defaultL.m
+%
+%
+% Author: Richard Y Zhang
+% Massachusetts Institute of Technology
+% Email: ryz@mit.edu  
+% Jan 2013; Last revision: 3rd Feb 2013
+
 
 % Default case
 if nargin ==0
 z = 0e-3;
 zp = 5e-3;
-L = defaultL(2);
-L.bnds(3)=0.2;
+L = defaultL(5);
 end
 
 %% Calculate using the FDM
-fprintf('Running FDM...\n');
+fprintf('Running FDM...');tic;
 [A1 r] = fdm_run(z,zp,L);
-
+fprintf(' Completed in %d seconds\n', toc);
 %% Detect if a cache exists
 recalc = false;
 try
@@ -29,7 +51,7 @@ end
 
 if ~recalc
     A2 = S.A2;
-    fprintf('LOADED FROM CACHE\n');
+    fprintf('===L O A D E D  F R O M  C A C H E===\n');
     fprintf(S.stdout);
 else
 
@@ -102,7 +124,7 @@ tic
 [A2, err] = quadht(integ,K,r,0,5e4); % use an intense quadrature to evaluate
 stdout = [sprintf('---QUADRATURE---\nQuadrature time:\t%g seconds\n',toc) ...
           sprintf('Quadrature rel err:\t%1.1e\n',err/norm(A2,inf)) ...
-          sprintf('Rel Err due to cutoff:\t%1.1e\n---\n',integ(K)/norm(A2,inf))];
+          sprintf('Rel Err due to cutoff:\t%1.1e\n',integ(K)/norm(A2,inf))];
 fprintf(stdout);
 A2 = A2*1e-7; % renormalize to mu/4pi
 
@@ -115,11 +137,7 @@ save('test_error_cache.tmp','A2','z','zp','L','stdout','r');
 % loglog(k1,abs(real(integ(k1))),k1,abs(imag(integ(k1))));
 end
 %% graphical treatment
-figure(2)
-subplot(211)
-loglog(r,abs(real(A1)),r,abs(real(A2)),r,abs(real(A1)-real(A2)));
-subplot(212)
-loglog(r,abs(imag(A1)),r,abs(imag(A2)),r,abs(imag(A1)-imag(A2)));
+
 figure(3)
 subplot(211)
 plot(r,abs(real(A1)),r,abs(real(A2)),r,abs(real(A1)-real(A2)));
@@ -127,7 +145,11 @@ xlim([0 0.1])
 subplot(212)
 plot(r,abs(imag(A1)),r,abs(imag(A2)),r,abs(imag(A1)-imag(A2)));
 xlim([0 0.1])
-
+figure(2)
+subplot(211)
+loglog(r,abs(real(A1)),r,abs(real(A2)),r,abs(real(A1)-real(A2)));
+subplot(212)
+loglog(r,abs(imag(A1)),r,abs(imag(A2)),r,abs(imag(A1)-imag(A2)));
 
 %% Error estimates
 abs_err = norm(A2-A1,inf);
