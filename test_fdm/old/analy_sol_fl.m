@@ -1,19 +1,18 @@
-function [A] = analy_sol_coil_fl(R,z,L)
+function [A r] = analy_sol_fl(z,zp,L) %fl = five layer
 % This code compares the data extracted from the FDM simulation with the
 % analytical solution commonly found in literature. The analytical solution
 % is generated using the fast hankel transform
-% 
+
 persistent k1
 persistent r1
 persistent I
 %% Prepare Kernel
 if isempty(I)
-    addpath([pwd '/hankel']) % Include the package
-    [~,k1,r1,I]=fht(@(x) 1,R*10,2*pi*100/R,1);
-    disp('Recalculating kernel for FL');
+    [~,k1,r1,I]=fht(@(x) 1,5,10000,0);
 end
 
-%% Preparation
+%% Prepare calculation
+% coil layer
 c = L.coil_layer;
 
 % plate thicknesses
@@ -36,7 +35,7 @@ lambda = @(k,w,id) phi(k,w,id) .* (1-exp(-2*t(id)*eta(k,w,id))) ./ ...
     (1-phi(k,w,id).^2.*exp(-2*t(id)*eta(k,w,id))); % Single layer Green's fn
 
 % Get parameters
-d1 = z-c_bnd;
+d1 = zp-c_bnd;
 d2 = z-c_bnd;
 d1p = s-d1;
 d2p = s-d2;
@@ -47,11 +46,11 @@ f = @(k,w) (lambda(k,w,1).*exp(-k.*(d1+d2)) + lambda(k,w,2).*exp(-k.*(d1p+d2p)))
 g = @(k,w) (2.*lambda(k,w,1).*lambda(k,w,2).*exp(-2*k*s).*cosh(k.*(d2-d1))) ...
     ./ (1 - lambda(k,w,1).*lambda(k,w,2).*exp(-2*k*s)); % Toeplitz part
 
-% Setup analytical Green's function
-Ar_ker = @(k,z,w) mu * pi * R^2 ./ k .* ((f(k,w)+g(k,w))) .* besselj(1,k*R); 
-
 % Generate results at z=0 and at z=0.05 for d = 0.01.
 % A1 is at z=d, A2 is at z=0
 % mu, mu_r, d, w should all be included in FDM_data.mat
-A = ifht(Ar_ker(k1,z,w),k1,r1,I);
-A = interp1(r1,A,R);
+T = ifht(1e-7 ./ k1 .* g(k1,w),k1,r1,I);
+H = ifht(1e-7 ./ k1 .* f(k1,w),k1,r1,I);
+
+A = T+H;
+r = r1;

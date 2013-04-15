@@ -1,0 +1,5 @@
+The contents of this folder are written to validate the results of the 
+folder ./green
+
+Here, we compare the convergence of the FDM method against analytical 
+solutions. 
