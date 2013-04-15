@@ -171,7 +171,7 @@ zout = z_val(ind1:ind2);
     %      Ar - the single rN x rN FDM A matrix for the r variation.
     %      r  - the coordinates of each r point
     %----------------------------------------------------------------------
-        xi = linspace(0,1,rN).'; % Define a uniformly space variable xi.
+        xi = linspace(0,1,rN).'; % Define a uniformly spaced variable xi.
         dx = xi(2)-xi(1); % Extract xi spacing.
         r = (xi.^ord + 0.5./(rN-1).^ord) * rbnd; % Shift r to enforce Neumann
         dr = r(2)-r(1); % Extract r spacing.

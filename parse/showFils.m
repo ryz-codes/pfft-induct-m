@@ -44,7 +44,7 @@ end
 
 
 % Draw the faces
-figure;
+clf;
 for ii = 1:size(O,1)
     if draw_face
         patch(f1x(ii,:), f1y(ii,:), f1z(ii,:), [1 0.5 0.5]); %pink
