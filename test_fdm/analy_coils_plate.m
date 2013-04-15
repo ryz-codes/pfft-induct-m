@@ -13,8 +13,6 @@ persistent I
 % end
 
 %% Preparation
-addpath([pwd '/hankel']) % Include the package
-
 z = 2*abs(z);
 mu=1e-7*4*pi;
 w = L.w;
