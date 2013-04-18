@@ -14,9 +14,15 @@ W = W/N1;
 H = H/N2;
 
 Oo = cell(N1,N2);
+Lo = cell(N1,N2);
+Wo = cell(N1,N2);
+Ho = cell(N1,N2);
 for ii = 1:N1
     for ij = 1:N2
         Oo{ii,ij} = O + (ii-1)*W + (ij-1)*H;
+        Lo{ii,ij} = L;
+        Wo{ii,ij} = W;
+        Ho{ii,ij} = H;
     end
 end
 

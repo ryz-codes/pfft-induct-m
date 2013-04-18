@@ -7,7 +7,7 @@ clear;
 DIMS = 3;
 
 green = @inv_r; % Use supplied 1/r green's function
-NUM_ELE = 10; % Number of elements simulated
+NUM_ELE = 1e3; % Number of elements simulated
 GRID_ELE = ones(1,DIMS) * 2^6; % Numer of grid points in each dimension
 OUTER_BOUNDS = ones(1,DIMS)*10; % Plus or minus bounds where elements are contained
 INTERP_ORD = 1;
