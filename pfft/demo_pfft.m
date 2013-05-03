@@ -7,19 +7,19 @@ clear;
 DIMS = 3;
 
 green = @inv_r; % Use supplied 1/r green's function
-NUM_ELE = 1e3; % Number of elements simulated
-GRID_ELE = ones(1,DIMS) * 2^6; % Numer of grid points in each dimension
+NUM_ELE = 2e2; % Number of elements simulated
+GRID_ELE = ones(1,DIMS) * 2^5; % Numer of grid points in each dimension
 OUTER_BOUNDS = ones(1,DIMS)*10; % Plus or minus bounds where elements are contained
 INTERP_ORD = 1;
-DIRECT_STEN = 3;
+DIRECT_STEN = 2;
 
 NUM_MV = 10; % Numer of times to repeat Matrix Vector product
 
 CMP_CALCP = true;
 
 % Generate centroids and charges within a box
-X = (rand(NUM_ELE,DIMS)-0.5)*19;
-Q = (ones(NUM_ELE,1)-0.5);
+X = (rand(NUM_ELE,DIMS)-0.5)*18;
+Q = (rand(NUM_ELE,1)-0.5);
 
 calcp = @(from,to) inv_r(num2cell(X(from,:)-X(to,:),1));
 

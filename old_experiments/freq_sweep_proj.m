@@ -52,7 +52,7 @@ end
 %%
 clear Vsub
 for ii = 1:length(F)
-    induct(0.126,[-0.028 D_OFF-4e-3],g{ii},true);
+    induct(0.126,[-0.028 D_OFF],g{ii},true);
     Vsub(ii) = sum(induct(I,fils{:}))
 end
 %%

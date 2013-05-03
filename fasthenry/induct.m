@@ -1,4 +1,4 @@
-function [ V ] = induct(varargin)
+function [ V, exec_t ] = induct(varargin)
 %INDUCT: calculates the PEEC matrix vector product [L]*I for a flat
 % coil systems, using the pre-corrected FFT algorithm.
 %   
@@ -16,8 +16,13 @@ function [ V ] = induct(varargin)
 %   2.  For each new set of filaments, call
 %           V = induct(I,O,L,W,H); or
 %           induct(I,O,L,W,H);
-%       to calculate the vector product [L]*I for [L] defined by the vectors
-%       O, L, W, and H.
+%       to initiate the precorrection and calculate the vector product 
+%       [L]*I for [L] defined by the vectors O, L, W, and H.
+%   
+%   2a. If a set of subtracted kernels are to be added, then call
+%           induct(g); 
+%       where g is the subtracted kernel to be added. WARNING: g must not
+%       include the 1/r portion (it will be added automatically).
 %
 %   3.  To do more MV products, for example for GMRES iterations, call
 %           V = induct(I);
@@ -38,10 +43,10 @@ persistent U
 persistent do_precor
 
 % Internal settings
-GRID_ELE_F = [2^6 2^6 2^2];
+GRID_ELE_F = [2^7 2^7 2^4]*2;
 GRID_ELE_S = [2^6 2^6 2^8];
 INTERP_ORD = 1;
-DIRECT_STEN = 3;
+DIRECT_STEN = 2;
 
 
 % Initialization routine for free-space elements
@@ -50,48 +55,26 @@ if (nargin == 2 || nargin == 3 ||nargin==4) && nargout == 0
     xy_bnd = varargin{1};
     z_bnd = varargin{2};
     
-    % Extract grid parameters if they are specified. 
-    if numel(xy_bnd) == 1 && (numel(z_bnd)<=2)
-        assert(numel(xy_bnd) == 1,'Only one value of xy_bnd accepted.');
-        bnds = [-1 1; -1 1]*xy_bnd;
-        if numel(z_bnd) == 1
-            bnds = vertcat(bnds,z_bnd*[-1 1]);
-        elseif numel(z_bnd) == 2
-            bnds = vertcat(bnds,z_bnd(:)');
-        else
-            error('Either one absolute value or two complementary values for z_bnd.');
-        end
-        
-        % Decide between the two predefined grid sizes.
-        if nargin == 2
-            g_e = GRID_ELE_F;
-        else
-            g_e = GRID_ELE_S; 
-        end
+    % Extract grid parameters
+    assert(numel(xy_bnd) == 1,'Only one value of xy_bnd accepted.');
+    bnds = [-1 1; -1 1]*xy_bnd;
+    if numel(z_bnd) == 1
+        bnds = vertcat(bnds,z_bnd*[-1 1]);
+    elseif numel(z_bnd) == 2
+        bnds = vertcat(bnds,z_bnd(:)');
     else
-        % Else, xy_bnd is the lower left corner of each box, and z_bnd is
-        % the upper right corner.
-        N = size(xy_bnd,1);
-        assert(size(z_bnd,1) == N);
-        assert((size(z_bnd,2) == 3) && (size(xy_bnd,2) == 3));
-
-        % Find the bounding box of the elements
-        min_d = min([xy_bnd;z_bnd],[],1);
-        max_d = max([xy_bnd;z_bnd],[],1);
-        dist_d = max_d-min_d;
-
-        % Find the number of boxes to make
-        num_box(1) = ((N/3) * dist_d(1)^2/(dist_d(2)*dist_d(3)))^(1/3);
-        num_box(2) = ((N/3) * dist_d(2)^2/(dist_d(1)*dist_d(3)))^(1/3);
-        num_box(3) = ((N/3) * dist_d(3)^2/(dist_d(2)*dist_d(1)))^(1/3);
-        %g_e = pow2(max(nextpow2(num_box)-1,0))*3; % Minimum 3 points!
-        g_e = GRID_ELE_F;
-        
-        box_d = dist_d./(g_e-2)*1.005; % pad the boundary and make the borders slightly larger
-        bnds = [min_d-box_d; max_d+box_d]';
+        error('Either one absolute value or two complementary values for z_bnd.');
     end
+
+    % Decide between the two predefined grid sizes.
+    if nargin == 2
+        g_e = GRID_ELE_F;
+    else
+        g_e = GRID_ELE_S; 
+    end
+
     % Initialize PFFT object
-    p = pfft(g_e,bnds,INTERP_ORD,DIRECT_STEN,0);
+    p = pfft(g_e,bnds,INTERP_ORD,DIRECT_STEN,1);
     
     % Free-space kernel
     if nargin ~= 4
@@ -121,9 +104,22 @@ if (nargin == 2 || nargin == 3 ||nargin==4) && nargout == 0
     fprintf('Initialization complete for g_e=%s\n',...
         mat2str(g_e));
     
+% Update the subtracted kernel
+elseif nargin == 1 && nargout == 0
+    tph_obj = varargin{1};
+    assert(isa(tph_obj,'tph'),'Must supply a tph object!');
     
+    % clear out the kernels.
+    p.init_kernel; 
+    
+    % Setup green's functions
+    t_fun = @(in) tph_wrap(tph_obj,'T',in) + 1e-7*inv_r(in);
+    h_fun = @(in) tph_wrap(tph_obj,'H',in);
+
+    % Init the new TPH kernel
+    p.init_kernel(t_fun, h_fun, [0 0 1]);
 % Calculation routine
-elseif nargin == 5 && nargout <= 1
+elseif nargin == 5
     a=tic;
     
     I = varargin{1};
@@ -150,7 +146,8 @@ elseif nargin == 5 && nargout <= 1
     
     % Project the geometry
     p.init_geometry(cen,qpnts,qwei,L_mag);
-    fprintf('Pfft projection time: %g\n',toc(a));
+    exec_t.proj = toc(a);
+    fprintf('Pfft projection time: %g\n',exec_t.proj);
     
     clear cen qpnts qwei L_mag
     if do_precor
@@ -162,11 +159,15 @@ elseif nargin == 5 && nargout <= 1
         getidx(W,from,to), getidx(H,from,to));
         
         p.init_precorrect(this_calcp,true);
-        fprintf('Pfft precorrect time: %g\n',toc(a));
+        exec_t.prec = toc(a);
+        fprintf('Pfft precorrect time: %g\n',exec_t.prec);
     end
     
+    % If current excitation is empty, we actually want the preconditioner.
+    V = p.Dmat;
+    
     % Deliver answer
-    if nargout > 0
+    if nargout > 0 && ~isempty(I)
         V = p.fastmv(I,U);
     end
     
@@ -175,7 +176,7 @@ elseif nargin == 1 && nargout == 1 && any(any(U))
     V = p.fastmv(varargin{1},U);
     
 else
-    help induct_free;
+    help induct;
 end
 
 end

@@ -30,21 +30,20 @@ classdef tph
     properties
         Hobj; Tobj; L;
         
-        z_min; z_max;
-        r_max;
+        z;
+        zp;
+        r;
     end
     
     methods
-        function hO = tph(L,lbnd,ubnd)
-            if nargin == 1
-                lbnd = 0.01;
-                ubnd = 0.99;
+        function hO = tph(L,zp,z)
+            if nargin == 2
+                z = zp; % centered box
             end
-            [H, ...
-             T, ...
-             r, ...
-             zh, ...
-             zt] = tableTPH(L,lbnd,ubnd);
+            % Assert that both zbnd and zpbnd have the same, even number of points.
+            assert(numel(z) == numel(zp),'number of points in z must be same as zp');
+            assert(mod(numel(z),2)==0,'number of points must be even');
+            [H, T, r, zh, zt] = tableTPH(L,zp,z);
              
              % Make interpolant objects
              [rg1,zg1] = ndgrid(r,zh);
@@ -52,10 +51,10 @@ classdef tph
              hO.Hobj = griddedInterpolant(rg1,zg1,H.','linear');
              hO.Tobj = griddedInterpolant(rg2,zg2,T.','linear');
              
-             % Save limits
-             hO.z_min = min(zh)/2;
-             hO.z_max = max(zh)/2;
-             hO.r_max = max(r);
+             % Save Guides
+             hO.z = z;
+             hO.zp = zp;
+             hO.r = r;
              
              % Layered structure
              hO.L = L;
@@ -106,11 +105,12 @@ classdef tph
     
 end
 
-function [Hr Tr r zh zt] = tableTPH(L,lbnd,ubnd)
+function [Hr Tr r zh zt] = tableTPH(L,zp,z)
 %TABLETPH Given the layer structure L, makes a T+H lookup table for the
 %layer selected by the flag coil_layer.
-% SYSTEM CONSTANTS
-INTERP_COLS = 10;
+% April 25th 2013, Added modifications based on proofs in paper. Pick
+% columns 1, N, round(1.6*log(N)), c+N/2
+INTERP_COLS = 4;
 
 % Identify coil layer
 coil_layer = L.coil_layer;     
@@ -121,26 +121,21 @@ assert(L.sig(coil_layer)==0 &&...
     L.mu_r(coil_layer)==1, 'Coil layer must be free-space!');
 
 % Identify upper and lower boundaries
-bnd_a = L.bnds(coil_layer+1)
-bnd_b = L.bnds(coil_layer)
+bnd_a = L.bnds(coil_layer+1);
+bnd_b = L.bnds(coil_layer);
 
-% Make the "box" 95% of the way to either boundary.
-z_val = linspace(bnd_b,bnd_a,zN);
-z = z_val(round(lbnd*zN):round(ubnd*zN));
-
-% Distribute runs evenly between two ends
-N = length(z);
-ip = round(linspace(1,N,INTERP_COLS));
+% Distribute the sources according to our proof
+N = length(zp);
+ip = [1,N,round(1.6*log(N))]; ip(4) = ip(3) + N/2;
 
 tstart = tic;
-A = cell(INTERP_COLS,1);
-for ii = 1:INTERP_COLS
-    fprintf('Run %u/%u: z=%g... ',ii,INTERP_COLS,z(ip(ii))); tic;
-    [A{ii},r,zout] = fdm_run([z(1),z(N)],z(ip(ii)),L);
+A = cell(4,1);
+for ii = 1:4
+    fprintf('Run %u/%u: zp=%g... ',ii,4,zp(ip(ii))); tic;
+    [A{ii},r] = fdm_run(z,zp(ip(ii)),L);
     fprintf('Ok (%gs)\n',toc);
 end
 tFDM = toc(tstart);
-
 
 % Do each r value
 Tr = [];
@@ -150,7 +145,7 @@ for ii = 1:length(r)
     fprintf('Split %u/%u: r=%g... ',ii,length(r),r(ii)); 
      G = zeros(N,INTERP_COLS);
      for ij = 1:INTERP_COLS
-         G(:,ij) = (A{ij}(ii,:)).';
+         G(:,ij) = (A{ij}(ii,:));
      end
     
     [Tr1 Hr1 FLAG RELRES ITER] = splitTPH(G,ip);
@@ -165,8 +160,8 @@ fprintf('Total split time=%gs\n',toc);
 
 % Prepare the guide vectors.
 r(1) = 0; % smudge the first r point to make it zero
-zh = linspace(2*z(1),2*z(N),2*N-1);
-zt = linspace(0,z(N)-z(1),N);
+zh = linspace(2*zp(1),2*zp(N),2*N-1);
+zt = linspace(0,zp(N)-zp(1),N);
 
 end
 

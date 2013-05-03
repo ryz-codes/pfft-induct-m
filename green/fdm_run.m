@@ -61,8 +61,8 @@ layerN = L.layerN;     bnds = L.bnds;
 %% MAIN FUNCTION
 
 % Error check before doing all the work!
-assert(all(z_range<=bnds(coil_layer+1)), 'z goes out of upper bound!')
-assert(all(z_range>=bnds(coil_layer)), 'z goes out of lower bound!')
+assert(all(zp<=bnds(coil_layer+1)), 'zp goes out of upper bound!')
+assert(all(zp>=bnds(coil_layer)), 'zp goes out of lower bound!')
 
 %--------------------------------------------------------------------------
 % FORM LEFT HAND SIDE
@@ -145,16 +145,18 @@ b = sparse(b_rows,1,b_ent,length(A),1);
 % SOLVE, INTERPOLATE AND GIVE RESULTS
 %--------------------------------------------------------------------------
 % Back substitute
-x = A \ b;
-x = reshape(x,rN,[]);
+x = full(A \ b);
+x = reshape(x,rN,[]) * 1e-7;%normalize to mu/4pi
 
-% Extract the results in the coil layer
-xout = x(:,bnd_ind(coil_layer,1):bnd_ind(coil_layer,2));
-xout = full(xout)*1e-7; %normalize to mu/4pi
+% Make z guide and perturb where values collide.
+z_guide = [z_cell{:}];
+pert = 1e-6;
+z_guide(bnd_ind(:,1)) = z_guide(bnd_ind(:,1)) - pert;
+z_guide(bnd_ind(:,2)) = z_guide(bnd_ind(:,2)) + pert;
 
 % Interpolate
 rout = r;
-xout = interp1(z_cell{coil_layer},xout.',z_range,'cubic');
+xout = interp1(z_guide,x.',z_range,'cubic');
 xout = xout.';
 zout = z_range;
 

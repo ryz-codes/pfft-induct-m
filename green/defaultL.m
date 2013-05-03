@@ -208,7 +208,8 @@ if SELECT ==10;
     PLATE_THICK = 25.4/8*1e-3; % 1/8 inch thick (0.125 +- 0.0005 in, 0.4%)
     % Spacers 0.709 in +- 0.0005, coil thickness 0.29-0.3 in
     % The following distance is between the coil mid-point and the plates
-    COIL_PLATE_SEP_DIST = (0.7095-0.295/2)*25.4e-3;
+    %COIL_PLATE_SEP_DIST = (0.7095-0.295/2)*25.4e-3;
+    COIL_PLATE_SEP_DIST = 0;
     L.w = 2*pi*1e3;
     
     % Define region
@@ -248,7 +249,7 @@ if SELECT ==11;
     %----------------------------------------------------------------------  
     PLATE_THICK = 25.4/8*1e-3; % 1/8 inch thick
     COIL_PLATE_SEP_DIST = 0;
-    SEP_DIST = (1.0825+0.7095)*25.4e-3;
+    SEP_DIST = 0;%(1.0825+0.7095)*25.4e-3;
     
     % Define region
     L.layerN = 5;

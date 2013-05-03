@@ -16,6 +16,7 @@ function [ output_args ] = showFils(O,L,W,H)
 % back faces.
 
 draw_face = size(O,1) < 200;
+%draw_face = true;
 if nargin == 1 && numel(O) == 4 %if input is a cell
     L = O{2};
     W = O{3};
@@ -50,14 +51,32 @@ for ii = 1:size(O,1)
         patch(f1x(ii,:), f1y(ii,:), f1z(ii,:), [1 0.5 0.5]); %pink
         patch(f6x(ii,:), f6y(ii,:), f6z(ii,:), [1 0.5 0.5]); %pink
     end
-    patch(f2x(ii,:), f2y(ii,:), f2z(ii,:), 'red');
-    patch(f3x(ii,:), f3y(ii,:), f3z(ii,:), 'red');
-    patch(f4x(ii,:), f4y(ii,:), f4z(ii,:), 'red');
-    patch(f5x(ii,:), f5y(ii,:), f5z(ii,:), 'red');
+    
+%     patch(f2x(ii,:), f2y(ii,:), f2z(ii,:), 'red');
+%     patch(f3x(ii,:), f3y(ii,:), f3z(ii,:), 'red');
+%     patch(f4x(ii,:), f4y(ii,:), f4z(ii,:), 'red');
+%     patch(f5x(ii,:), f5y(ii,:), f5z(ii,:), 'red');
+    
+    % Uncomment below to have more realistic pics
+    patch(f2x(ii,:), f2y(ii,:), f2z(ii,:), 'red','linestyle','none');
+    patch(f3x(ii,:), f3y(ii,:), f3z(ii,:), 'red','linestyle','none');
+    patch(f4x(ii,:), f4y(ii,:), f4z(ii,:), 'red','linestyle','none');
+    patch(f5x(ii,:), f5y(ii,:), f5z(ii,:), 'red','linestyle','none');
 end
 view(3);
 axis('equal');
-
+% light('Position',[1 1 1]);
+% material dull
+% lighting phong
+%shading interp
+lightangle(90-45,30)
+set(gcf,'Renderer','zbuffer')
+set(findobj(gca,'type','surface'),...
+    'FaceLighting','phong',...
+    'AmbientStrength',.6,'DiffuseStrength',.8,...
+    'SpecularStrength',.9,'SpecularExponent',25,...
+    'BackFaceLighting','unlit')
+material shiny
     % Private function to sort out the vertices
     function [fx, fy, fz] = getface (a,b,c,d)
         fx = [vert{a}(:,1) vert{b}(:,1) vert{c}(:,1) vert{d}(:,1)];
